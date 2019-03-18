@@ -135,7 +135,6 @@
     state: directory
 
 - name: /etc/systemd/system/dnsmasq.service.d/override.conf
-  notify: Restart
   copy:
     dest: /etc/systemd/system/dnsmasq.service.d/override.conf
     content: |
@@ -143,7 +142,6 @@
       After=docker.service
 
 - name: /etc/dnsmasq.conf
-  notify: Restart
   lineinfile:
     path: /etc/dnsmasq.conf
     line: conf-dir=/etc/dnsmasq.d
@@ -154,7 +152,6 @@
     state: directory
 
 - name: /etc/dnsmasq.d/upstream.conf
-  notify: Restart
   copy:
     dest: /etc/dnsmasq.d/upstream.conf
     content: server=8.8.8.8
