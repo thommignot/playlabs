@@ -9,12 +9,8 @@ server:
 remote-control:
   control-enable: yes
 
-key:
-  name: sec_key
-  algorithm: hmac-sha256
-  secret: {{ key_secret | b64encode }}
-
-# Primary zone definition for {{ zone_name }}
+{% for zone in bind_zone_domains %}
 zone:
-  name: {{ zone_name }}
-  zonefile: {{ zone_name }}.signed
+  name: {{ zone.name }}
+  zonefile: db.{{ zone.name }}
+{% endfor %}

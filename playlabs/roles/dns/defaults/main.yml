@@ -26,3 +26,17 @@ bind_zone_domains:
           - www
       - name: priv01
         ip: 10.0.0.1
+  - name: mydomain2.com
+    hosts:
+      - name: pub01
+        ip: 192.0.2.1
+        aliases:
+          - ns
+      - name: '@'
+        ip:
+          - 192.0.2.2
+          - 192.0.2.3
+        aliases:
+          - www
+      - name: priv01
+        ip: 10.0.0.1
