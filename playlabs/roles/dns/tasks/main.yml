@@ -6,20 +6,101 @@
     name: bind9
     state: absent
 
+- name: Make sure a service is running
+  systemd:
+    state: stopped
+    name: systemd-resolved
+    enabled: no
+
+- name: Install dnsmasq
+  package:
+    name: dnsmasq
+    state: absent
+
+- name: create dns directory
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: 0775
+  with_items:
+    - '{{ nsd_data }}'
+    - '{{ nsd_data }}/conf'
+    - '{{ nsd_data }}/zones'
+    - '{{ nsd_data }}/db'
+
+- name: Create base nsd configuration file
+  template:
+    src: nsd.conf.j2
+    dest: "{{ nsd_data }}/conf/nsd.conf"
+    owner: root
+    group: root
+    mode: 0644
+
+- name: Create zone configuration file
+  template:
+    src: db.domain.tld.j2
+    dest: "{{ nsd_data }}/zones/{{ zone_name }}.signed"
+    owner: root
+    group: root
+    mode: 0644
+
+- name: Create serial, based on UTC UNIX time
+  command: date -u +%s
+  register: timestamp
+  changed_when: false
+  run_once: true
+  check_mode: false
+  tags: bind
+
+- name: Read forward zone hashes
+  shell: 'grep -s "^; Hash:" {{ nsd_data }}/zones/{{ item.name }} || true'
+  changed_when: false
+  check_mode: false
+  register: forward_hashes_temp
+  with_items:
+    - "{{ bind_zone_domains }}"
+
+- name: create dict of forward hashes
+  set_fact:
+    forward_hashes: "{{ forward_hashes|default([]) + [ {'hash': item.stdout|default(), 'name': item.item.name} ] }}"
+  with_items:
+    - "{{ forward_hashes_temp.results }}"
+
+- name: Master | Create forward lookup zone file
+  template:
+    src: bind_zone.j2
+    dest: "{{ nsd_data }}/zones/{{ item.name }}"
+    # owner: "{{ bind_owner }}"
+    # group: "{{ bind_group }}"
+    # mode: "{{ bind_zone_file_mode }}"
+    owner: root
+    group: root
+    mode: 0644
+    setype: named_zone_t
+    # validate: 'named-checkzone -d {{ item.name }} %s'
+  with_items:
+    - "{{ bind_zone_domains }}"
+
+- name: Run hardware/nsd-dnssec
+  docker_container:
+    name: nsd
+    image: hardware/nsd-dnssec
+    restart_policy: always
+    command: ["keygen {{ zone_name }}", "signzone {{ zone_name }}"]
+    published_ports:
+    - "53:53"
+    - "53:53/udp"
+    volumes:
+    - '{{ nsd_data }}/conf:/etc/nsd'
+    - '{{ nsd_data }}/zones:/zones'
+    - '{{ nsd_data }}/db:/var/db/nsd'
+
 - name: Install dnsmasq
   package:
     name: dnsmasq
     state: present
-
-- name: Run docker-dns
-  docker_container:
-    name: dns
-    image: jderusse/dns-gen
-    restart_policy: always
-    published_ports: ['54:53/udp']
-    capabilities: [NET_BIND_SERVICE]
-    volumes:
-    - /var/run/docker.sock:/var/run/docker.sock:ro
 
 - name: /etc/systemd/system/docker.service.d
   file:
@@ -33,56 +114,61 @@
       [Service]
       ExecStart=
       ExecStart=/usr/bin/dockerd -H fd:// --bip=172.17.0.1/16 --dns=172.17.0.1
-
-- name: /etc/systemd/system/dnsmasq.service.d
-  file:
-    path: /etc/systemd/system/dnsmasq.service.d
-    state: directory
-
-- name: /etc/systemd/system/dnsmasq.service.d/override.conf
-  notify: Restart
-  copy:
-    dest: /etc/systemd/system/dnsmasq.service.d/override.conf
-    content: |
-      [Unit]
-      After=docker.service
-
-- name: /etc/dnsmasq.conf
-  notify: Restart
-  lineinfile:
-    path: /etc/dnsmasq.conf
-    line: conf-dir=/etc/dnsmasq.d
-
-- name: /etc/dnsmasq.d
-  file:
-    path: /etc/dnsmasq.d
-    state: directory
-
-- name: /etc/dnsmasq.d/upstream.conf
-  notify: Restart
-  copy:
-    dest: /etc/dnsmasq.d/upstream.conf
-    content: server=8.8.8.8
-
-- name: /etc/dnsmasq.d/docker.conf
-  notify: Restart
-  copy:
-    dest: /etc/dnsmasq.d/docker.conf
-    content: |
-      bind-interfaces
-      interface=lo
-      interface=docker0
-      server=/docker/127.0.0.1#54
-
-- name: /etc/dnsmasq.d/local.conf
-  when: dns_local_resolve is defined
-  notify: Restart
-  copy:
-    dest: /etc/dnsmasq.d/local.conf
-    content: |
-      {% for dns in dns_local_resolve %}
-      server=/{{ dns }}/127.0.0.1#54
-      {% endfor %}
+#
+# - name: Install dnsmasq
+#   package:
+#     name: dnsmasq
+#     state: present
+#
+# - name: /etc/systemd/system/dnsmasq.service.d
+#   file:
+#     path: /etc/systemd/system/dnsmasq.service.d
+#     state: directory
+#
+# - name: /etc/systemd/system/dnsmasq.service.d/override.conf
+#   notify: Restart
+#   copy:
+#     dest: /etc/systemd/system/dnsmasq.service.d/override.conf
+#     content: |
+#       [Unit]
+#       After=docker.service
+#
+# - name: /etc/dnsmasq.conf
+#   notify: Restart
+#   lineinfile:
+#     path: /etc/dnsmasq.conf
+#     line: conf-dir=/etc/dnsmasq.d
+#
+# - name: /etc/dnsmasq.d
+#   file:
+#     path: /etc/dnsmasq.d
+#     state: directory
+#
+# - name: /etc/dnsmasq.d/upstream.conf
+#   notify: Restart
+#   copy:
+#     dest: /etc/dnsmasq.d/upstream.conf
+#     content: server=8.8.8.8
+#
+# - name: /etc/dnsmasq.d/docker.conf
+#   notify: Restart
+#   copy:
+#     dest: /etc/dnsmasq.d/docker.conf
+#     content: |
+#       bind-interfaces
+#       interface=lo
+#       interface=docker0
+#       server=/docker/127.0.0.1#54
+#
+# - name: /etc/dnsmasq.d/local.conf
+#   when: dns_local_resolve is defined
+#   notify: Restart
+#   copy:
+#     dest: /etc/dnsmasq.d/local.conf
+#     content: |
+#       {% for dns in dns_local_resolve %}
+#       server=/{{ dns }}/127.0.0.1#54
+#       {% endfor %}
 
 - name: Configure /etc/resolv.conf
   copy:

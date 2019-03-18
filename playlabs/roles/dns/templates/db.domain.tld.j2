@@ -1,0 +1,30 @@
+$ORIGIN {{ zone_name }}.
+$TTL 7200
+
+; SOA
+
+@       IN      SOA    ns1.{{ zone_name }}. hostmaster.{{ zone_name }}. (
+                                        2016020202 ; Serial
+                                        7200       ; Refresh
+                                        1800       ; Retry
+                                        1209600    ; Expire
+                                        86400 )    ; Minimum
+
+; NAMESERVERS
+
+@                   IN                NS                   ns1.{{ zone_name }}.
+
+; A RECORDS
+
+@                   IN                A                    IPv4
+hostname            IN                A                    IPv4
+ns1                 IN                A                    IPv4
+ns2                 IN                A                    IPv4
+
+; CNAME RECORDS
+
+www                 IN                CNAME                hostname
+
+; MAIL RECORDS
+
+;@                   IN                MX          10       hostname.{{ zone_name }}.

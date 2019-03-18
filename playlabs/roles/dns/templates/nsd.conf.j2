@@ -1,0 +1,20 @@
+# {{ ansible_managed }}
+server:
+  server-count: 1
+  ip4-only: yes
+  hide-version: yes
+  identity: ""
+  zonesdir: "/zones"
+
+remote-control:
+  control-enable: yes
+
+key:
+  name: sec_key
+  algorithm: hmac-sha256
+  secret: {{ key_secret | b64encode }}
+
+# Primary zone definition for {{ zone_name }}
+zone:
+  name: {{ zone_name }}
+  zonefile: {{ zone_name }}.signed

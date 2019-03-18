@@ -1,0 +1,28 @@
+---
+
+nsd_data: /home/nsd
+zone_name: "example.com"
+key_secret: toto
+
+# SOA information
+bind_zone_ttl: "1W"
+bind_zone_time_to_refresh: "1D"
+bind_zone_time_to_retry: "1H"
+bind_zone_time_to_expire: "1W"
+bind_zone_minimum_ttl: "1D"
+
+bind_zone_domains:
+  - name: mydomain.com
+    hosts:
+      - name: pub01
+        ip: 192.0.2.1
+        aliases:
+          - ns
+      - name: '@'
+        ip:
+          - 192.0.2.2
+          - 192.0.2.3
+        aliases:
+          - www
+      - name: priv01
+        ip: 10.0.0.1
